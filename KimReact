@@ -1,0 +1,178 @@
+frontend components of AI Response Feedback using github
+import React, { useState, useEffect } from "react";
+ 
+type Vote = "support" | "dont_support" | null;
+ 
+interface Props {
+  aiResponseId: string;
+  initialSupportCount?: number;
+  initialDontSupportCount?: number;
+  currentUserVote?: Vote;
+  onAnalytics?: (event: string, payload?: any) => void;
+  small?: boolean; // match compact social-ad style
+}
+ 
+/*
+Compact React + TypeScript component for the social ad app.
+- Distinct from post upvote controls.
+- Supports optimistic updates, typed feedback prompt (inline), undo.
+- Replace fetch with your API client.
+*/
+ 
+export const AIResponseFeedback: React.FC<Props> = ({
+  aiResponseId,
+  initialSupportCount = 0,
+  initialDontSupportCount = 0,
+  currentUserVote = null,
+  onAnalytics,
+  small = true,
+}) => {
+  const [supportCount, setSupportCount] = useState(initialSupportCount);
+  const [dontSupportCount, setDontSupportCount] = useState(initialDontSupportCount);
+  const [userVote, setUserVote] = useState<Vote>(currentUserVote);
+  const [pending, setPending] = useState(false);
+  const [undoVisible, setUndoVisible] = useState(false);
+  const [showTextEditor, setShowTextEditor] = useState(false);
+  const [textValue, setTextValue] = useState("");
+  const undoTimer = React.useRef<number | null>(null);
+ 
+  useEffect(() => {
+    return () => {
+      if (undoTimer.current) window.clearTimeout(undoTimer.current);
+    };
+  }, []);
+ 
+  const submitVote = async (vote: Vote, text?: string) => {
+    if (!vote) return;
+    setPending(true);
+    const prevVote = userVote;
+    // optimistic counts
+    if (vote === "support") {
+      setSupportCount((c) => c + (prevVote === "support" ? 0 : 1));
+      if (prevVote === "dont_support") setDontSupportCount((c) => Math.max(0, c - 1));
+    } else {
+      setDontSupportCount((c) => c + (prevVote === "dont_support" ? 0 : 1));
+      if (prevVote === "support") setSupportCount((c) => Math.max(0, c - 1));
+    }
+    setUserVote(vote);
+    setUndoVisible(true);
+    undoTimer.current = window.setTimeout(() => setUndoVisible(false), 10000);
+ 
+    try {
+      await fetch(`/api/v1/ai-responses/${aiResponseId}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vote,
+          text,
+          client_timestamp: new Date().toISOString(),
+        }),
+      });
+      onAnalytics?.("feedback.submitted", { aiResponseId, vote });
+    } catch (err) {
+      // revert on error
+      setUserVote(prevVote);
+      if (vote === "support") {
+        setSupportCount((c) => Math.max(0, c - 1));
+        if (prevVote === "dont_support") setDontSupportCount((c) => c + 1);
+      } else {
+        setDontSupportCount((c) => Math.max(0, c - 1));
+        if (prevVote === "support") setSupportCount((c) => c + 1);
+      }
+      onAnalytics?.("feedback.error", { aiResponseId, error: String(err) });
+      // (In production show inline toast)
+    } finally {
+      setPending(false);
+      setShowTextEditor(false);
+      setTextValue("");
+    }
+  };
+ 
+  const undo = async () => {
+    if (!userVote) return;
+    const prev = userVote;
+    // optimistic undo
+    setUserVote(null);
+    setUndoVisible(false);
+    if (prev === "support") setSupportCount((c) => Math.max(0, c - 1));
+    if (prev === "dont_support") setDontSupportCount((c) => Math.max(0, c - 1));
+    try {
+      await fetch(`/api/v1/ai-responses/${aiResponseId}/feedback`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      onAnalytics?.("feedback.undone", { aiResponseId });
+    } catch (err) {
+      // revert undo if failed
+      setUserVote(prev);
+      if (prev === "support") setSupportCount((c) => c + 1);
+      if (prev === "dont_support") setDontSupportCount((c) => c + 1);
+      onAnalytics?.("feedback.error", { aiResponseId, error: String(err) });
+    }
+  };
+ 
+  return (
+<div className={`ai-feedback ${small ? "small" : ""}`} role="group" aria-label="AI response feedback">
+<span className="ai-badge" aria-hidden>AI</span>
+ 
+      <button
+        className={`btn support ${userVote === "support" ? "active" : ""}`}
+        aria-pressed={userVote === "support"}
+        onClick={() => submitVote("support")}
+        disabled={pending}
+        aria-label={`Support — ${supportCount} votes`}
+>
+        👍 {supportCount > 0 ? supportCount : ""}
+</button>
+ 
+      <button
+        className={`btn dont-support ${userVote === "dont_support" ? "active" : ""}`}
+        aria-pressed={userVote === "dont_support"}
+        onClick={() => submitVote("dont_support")}
+        disabled={pending}
+        aria-label={`Don't support — ${dontSupportCount} votes`}
+>
+        👎 {dontSupportCount > 0 ? dontSupportCount : ""}
+</button>
+ 
+      <button className="btn text-link" onClick={() => setShowTextEditor((s) => !s)}>Add feedback</button>
+ 
+      {showTextEditor && (
+<div className="text-editor">
+<textarea
+            placeholder="Optional feedback (1000 chars)"
+            value={textValue}
+            onChange={(e) => setTextValue(e.target.value.slice(0, 1000))}
+            rows={3}
+          />
+<div className="editor-actions">
+<button onClick={() => submitVote(userVote ?? "support", textValue)} disabled={pending}>
+              Submit
+</button>
+<button onClick={() => { setShowTextEditor(false); setTextValue(""); }}>Cancel</button>
+</div>
+</div>
+      )}
+ 
+      {undoVisible && (
+<span className="undo">
+          Feedback recorded • <button onClick={undo}>Undo</button>
+</span>
+      )}
+ 
+      <style>{`
+        .ai-feedback { display:flex; gap:8px; align-items:center; margin-top:8px; font-size:13px; }
+        .ai-badge { font-size:11px; color:#666; padding:2px 6px; border-radius:10px; background:#f2f2f2; }
+        .btn { padding:6px 8px; border-radius:8px; cursor:pointer; border:1px solid #ddd; background:white; }
+        .btn.support.active { background:#e6ffef; border-color:#2ea95c; }
+        .btn.dont-support.active { background:#fff0f0; border-color:#e04646; }
+        .btn.text-link { background:transparent; border:none; color:#007bff; text-decoration:underline; padding:0; }
+        .text-editor { margin-left:8px; display:flex; flex-direction:column; gap:6px; width:320px; }
+        .text-editor textarea { width:100%; border:1px solid #ddd; border-radius:6px; padding:8px; }
+        .editor-actions { display:flex; gap:8px; }
+        .undo { margin-left:8px; color:#666; font-size:12px; }
+      `}</style>
+</div>
+  );
+};
