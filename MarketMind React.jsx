@@ -267,26 +267,63 @@ function handleResetPassword() {
 /* ===== Login handler ===== */
 
 
-function handleLogin() {
+let introStep = 0;
 
-  const u = document.getElementById("login-username").value.trim().toLowerCase();
+function appIntroScreen() {
+  let header = "", subheader = "", body = "";
 
-  const p = document.getElementById("login-password").value;
-
-
-  if (u === fixedUsername && p === currentPassword) {
-
-    mainLoggedInScreen();
-
-  } else {
-
-    loginScreen("Incorrect username or password.");
-
+  if (introStep === 0) {
+    header = "Let's Discover";
+    subheader = "Test your marketing ideas";
+    body = "Submit your marketing questions or choose from common campaign ideas, then get AI-powered insights to see which strategies have the most potential.";
+  } else if (introStep === 1) {
+    header = "See what Resonates";
+    subheader = "AI insights reveal which ideas have the most impact.";
+    body = "After submitting your questions or ideas, our AI analyzes responses to highlight the most compelling options. Use these insights to make data-driven marketing decisions and refine your strategies.";
   }
 
+  show(`
+    <div class="screen">
+      <div class="card">
+        <div class="app-tag">MarketMind</div>
+        <div class="title">${header}</div>
+        <div class="subtitle">${subheader}</div>
+        <div class="body" style="margin-bottom:32px; line-height:1.5;">${body}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="progress-indicator" style="font-size:12px; color:#888aa0;">Step ${introStep + 1}/2</div>
+          <button class="next-btn" onclick="nextIntro()">Next →</button>
+        </div>
+      </div>
+    </div>
+  `);
 }
 
-/* ======== Main / Profile / AI / Settings Pages ======== */
+
+
+function nextIntro() {
+  introStep++;
+  if (introStep >= 2) {
+    introStep = 0;
+    mainLoggedInScreen(); // Go to main home screen after last intro page
+  } else {
+    appIntroScreen();
+  }
+}
+
+// ======= Update handleLogin to show intro after login =====
+function handleLogin() {
+  const u = document.getElementById("login-username").value.trim().toLowerCase();
+  const p = document.getElementById("login-password").value;
+
+  if (u === fixedUsername && p === currentPassword) {
+    // Instead of going straight to home, show intro screens first
+    introStep = 0;
+    appIntroScreen();
+  } else {
+    loginScreen("Incorrect username or password.");
+  }
+}
+
 
 function renderBottomNav() {
   return `
@@ -307,8 +344,6 @@ function renderBottomNav() {
 </div>
 `;
 }
-
-/* ======== Main / Profile / AI / Settings Pages ======== */
 
 function renderBottomNav() {
   return `
