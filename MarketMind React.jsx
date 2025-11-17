@@ -337,7 +337,7 @@ function mainLoggedInScreen() {
 <div class="app-tag">MarketMind</div>
 <div class="title">Welcome, ${fixedUsername}!</div>
 <div class="subtitle">
-  This is your dashboard. From here, you can manage your ideas or explore AI insights.
+  Welcome to MarketMind. Click the buttons below to view marketing ideas or discuss new ideas with our AI chatbot.
 </div>
 
 <button class="primary" onclick="profileScreen()">My Ideas</button>
@@ -369,7 +369,7 @@ function profileScreen() {
   const ideas = [
     { text: "The #OneRollChallenge", score: 78 },
     { text: "Interactive Texture Gallery", score: 92 },
-    { text: "Coffee Wast Reuse Campaign", score: 85 },
+    { text: "Coffee Waste Reuse Campaign", score: 85 },
   ];
 
   let ideasHTML = ideas
